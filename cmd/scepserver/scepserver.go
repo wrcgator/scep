@@ -3,6 +3,7 @@ package main
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -25,12 +26,12 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/wrcgator/scep/common"
 	"github.com/wrcgator/scep/csrverifier"
 	"github.com/wrcgator/scep/csrverifier/executable"
 	"github.com/wrcgator/scep/depot"
 	"github.com/wrcgator/scep/depot/file"
 	"github.com/wrcgator/scep/server"
-	"github.com/wrcgator/scep/common"
 )
 
 // version info
@@ -186,6 +187,8 @@ func caMain(cmd *flag.FlagSet) int {
 		switch *flAlgorithm {
 		case "ECDSA":
 			algorithm = x509.ECDSA
+		case "ED25519":
+			algorithm = x509.Ed25519
 		default:
 			algorithm = x509.RSA
 		}
@@ -201,6 +204,10 @@ func caMain(cmd *flag.FlagSet) int {
 		case x509.ECDSA:
 			ecdsakey := (*key).(*ecdsa.PrivateKey)
 			pub = ecdsakey.Public()
+		case x509.Ed25519:
+			ed25519key := (*key).(ed25519.PrivateKey)
+			pub = ed25519key.Public()
+
 		default:
 			rsakey := (*key).(*rsa.PrivateKey)
 			pub = rsakey.Public()
@@ -264,6 +271,11 @@ func createKey(bits int, password []byte, depot string, algorithm x509.PublicKey
 		if err != nil {
 			return nil, err
 		}
+
+	case x509.Ed25519:
+		blockType = common.Ed25519PrivateKeyPEMBlockType
+		_, key, err = ed25519.GenerateKey(rand.Reader)
+
 	default:
 		// create RSA key and save as PEM file
 		blockType = common.RsaPrivateKeyPEMBlockType
@@ -396,6 +408,11 @@ type ecdsaPublicKey struct {
 	Y *big.Int
 }
 
+// ecdsaPublicKey reflects the ASN.1 structure of a PKCS#1 public key.
+type ed25519PublicKey struct {
+	Data []byte
+}
+
 // GenerateSubjectKeyID generates SubjectKeyId used in Certificate
 // ID is 160-bit SHA-1 hash of the value of the BIT STRING subjectPublicKey
 func
@@ -417,8 +434,13 @@ generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
 			pub.Y,
 		})
 
+	case ed25519.PublicKey:
+		pubBytes, err = asn1.Marshal(ed25519PublicKey{
+			Data: pub,
+		})
+
 	default:
-		return nil, errors.New("only RSA and ECDSA public keys are supported")
+		return nil, errors.New("only RSA, ECDSA and ED25519 public keys are supported")
 	}
 
 	hash := sha1.Sum(pubBytes)

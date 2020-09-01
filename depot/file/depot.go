@@ -372,7 +372,9 @@ func loadKey(data []byte, password []byte) (*crypto.PrivateKey, error) {
 	if pemBlock == nil {
 		return nil, errors.New("PEM decode failed")
 	}
-	if pemBlock.Type != common.RsaPrivateKeyPEMBlockType &&  pemBlock.Type != common.EcdsaPrivateKeyPEMBlockType{
+	if pemBlock.Type != common.RsaPrivateKeyPEMBlockType &&
+		pemBlock.Type != common.EcdsaPrivateKeyPEMBlockType &&
+		pemBlock.Type != common.Ed25519PrivateKeyPEMBlockType {
 		return nil, errors.New("unmatched type or headers")
 	}
 

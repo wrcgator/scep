@@ -33,6 +33,7 @@ package x509util
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	_ "crypto/sha1"
@@ -232,6 +233,10 @@ func signingParamsForPublicKey(pub interface{}, requestedSigAlgo x509.SignatureA
 		sigAlgo.Algorithm = oidSignatureSHA256WithRSA
 		sigAlgo.Parameters = asn1NullRawValue
 
+	case *ed25519.PublicKey:
+		pubType = x509.Ed25519
+		sigAlgo.Algorithm = oidSignatureEd25519
+
 	case *ecdsa.PublicKey:
 		pubType = x509.ECDSA
 
@@ -250,7 +255,7 @@ func signingParamsForPublicKey(pub interface{}, requestedSigAlgo x509.SignatureA
 		}
 
 	default:
-		err = errors.New("x509: only RSA and ECDSA keys supported")
+		err = errors.New("x509: only RSA, ECDSA and ED25519 keys supported")
 	}
 
 	if err != nil {
@@ -319,6 +324,7 @@ var signatureAlgorithmDetails = []struct {
 	{x509.ECDSAWithSHA256, oidSignatureECDSAWithSHA256, x509.ECDSA, crypto.SHA256},
 	{x509.ECDSAWithSHA384, oidSignatureECDSAWithSHA384, x509.ECDSA, crypto.SHA384},
 	{x509.ECDSAWithSHA512, oidSignatureECDSAWithSHA512, x509.ECDSA, crypto.SHA512},
+	{x509.PureEd25519, oidSignatureEd25519, x509.Ed25519, crypto.Hash(0) /* no pre-hashing */},
 }
 
 var (
@@ -335,6 +341,7 @@ var (
 	oidSignatureECDSAWithSHA256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}
 	oidSignatureECDSAWithSHA384 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3}
 	oidSignatureECDSAWithSHA512 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 4}
+	oidSignatureEd25519         = asn1.ObjectIdentifier{1, 3, 101, 112}
 
 	oidSHA256 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
 	oidSHA384 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 2}
