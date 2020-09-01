@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/micromdm/scep/challenge"
-	"github.com/micromdm/scep/csrverifier"
-	"github.com/micromdm/scep/depot"
-	"github.com/micromdm/scep/scep"
+	"github.com/wrcgator/scep/challenge"
+	"github.com/wrcgator/scep/csrverifier"
+	"github.com/wrcgator/scep/depot"
+	"github.com/wrcgator/scep/scep"
 )
 
 // Service is the interface for all supported SCEP server operations.
@@ -42,7 +42,7 @@ type Service interface {
 type service struct {
 	depot                   depot.Depot
 	ca                      []*x509.Certificate // CA cert or chain
-	caKey                   *rsa.PrivateKey
+	caKey                   *crypto.PrivateKey
 	caKeyPassword           []byte
 	csrTemplate             *x509.Certificate
 	challengePassword       string

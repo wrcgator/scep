@@ -1,4 +1,6 @@
-module github.com/micromdm/scep
+module github.com/wrcgator/scep
+
+go 1.15
 
 require (
 	github.com/boltdb/bolt v1.3.1

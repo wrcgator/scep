@@ -3,3 +3,11 @@ cmd/scepserver/scepserver
 cmd/scepclient/scepclient
 build/
 vendor/
+
+cmd/scepserver/.idea/
+
+cmd/scepserver/bin/depot_ecdsa/
+
+cmd/scepserver/bin/depot_rsa/
+
+cmd/scepserver/bin/

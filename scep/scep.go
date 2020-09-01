@@ -19,7 +19,7 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 
-	"github.com/micromdm/scep/crypto/x509util"
+	"github.com/wrcgator/scep/crypto/x509util"
 )
 
 // errors
@@ -305,7 +305,7 @@ func (msg *PKIMessage) parseMessageType() error {
 }
 
 // DecryptPKIEnvelope decrypts the pkcs envelopedData inside the SCEP PKIMessage
-func (msg *PKIMessage) DecryptPKIEnvelope(cert *x509.Certificate, key *rsa.PrivateKey) error {
+func (msg *PKIMessage) DecryptPKIEnvelope(cert *x509.Certificate, key *crypto.PrivateKey) error {
 	p7, err := pkcs7.Parse(msg.p7.Content)
 	if err != nil {
 		return err
@@ -360,7 +360,7 @@ func (msg *PKIMessage) DecryptPKIEnvelope(cert *x509.Certificate, key *rsa.Priva
 	}
 }
 
-func (msg *PKIMessage) Fail(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, info FailInfo) (*PKIMessage, error) {
+func (msg *PKIMessage) Fail(crtAuth *x509.Certificate, keyAuth *crypto.PrivateKey, info FailInfo) (*PKIMessage, error) {
 	config := pkcs7.SignerInfoConfig{
 		ExtraSignedAttributes: []pkcs7.Attribute{
 			pkcs7.Attribute{
@@ -425,7 +425,7 @@ func (msg *PKIMessage) Fail(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, 
 
 // SignCSR creates an x509.Certificate based on a template and Cert Authority credentials
 // returns a new PKIMessage with CertRep data
-func (msg *PKIMessage) SignCSR(crtAuth *x509.Certificate, keyAuth *rsa.PrivateKey, template *x509.Certificate) (*PKIMessage, error) {
+func (msg *PKIMessage) SignCSR(crtAuth *x509.Certificate, keyAuth *crypto.PrivateKey, template *x509.Certificate) (*PKIMessage, error) {
 	// check if CSRReqMessage has already been decrypted
 	if msg.CSRReqMessage.CSR == nil {
 		if err := msg.DecryptPKIEnvelope(crtAuth, keyAuth); err != nil {

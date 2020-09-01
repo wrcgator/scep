@@ -8,11 +8,15 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+
+	"github.com/wrcgator/scep/common"
 )
 
+/* --- moved to common
 const (
 	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
 )
+*/
 
 // create a new RSA private key
 func newRSAKey(bits int) (*rsa.PrivateKey, error) {
@@ -41,7 +45,7 @@ func loadOrMakeKey(path string, rsaBits int) (*rsa.PrivateKey, error) {
 	}
 	privBytes := x509.MarshalPKCS1PrivateKey(priv)
 	pemBlock := &pem.Block{
-		Type:    rsaPrivateKeyPEMBlockType,
+		Type:    RsaPrivateKeyPEMBlockType,
 		Headers: nil,
 		Bytes:   privBytes,
 	}

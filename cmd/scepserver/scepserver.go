@@ -2,6 +2,8 @@ package main
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -23,11 +25,12 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/micromdm/scep/csrverifier"
-	"github.com/micromdm/scep/csrverifier/executable"
-	"github.com/micromdm/scep/depot"
-	"github.com/micromdm/scep/depot/file"
-	"github.com/micromdm/scep/server"
+	"github.com/wrcgator/scep/csrverifier"
+	"github.com/wrcgator/scep/csrverifier/executable"
+	"github.com/wrcgator/scep/depot"
+	"github.com/wrcgator/scep/depot/file"
+	"github.com/wrcgator/scep/server"
+	"github.com/wrcgator/scep/common"
 )
 
 // version info
@@ -173,8 +176,45 @@ func caMain(cmd *flag.FlagSet) int {
 		flOrgUnit   = cmd.String("organizational_unit", "SCEP CA", "organizational unit (OU) for CA cert")
 		flPassword  = cmd.String("key-password", "", "password to store rsa key")
 		flCountry   = cmd.String("country", "US", "country for CA cert")
+		flAlgorithm = cmd.String("algorithm", "RSA", "algorithm for CA cert")
 	)
+
+	var algorithm x509.PublicKeyAlgorithm
 	cmd.Parse(os.Args[2:])
+	if *flInit {
+		fmt.Println("Initializing new %s CA", *flAlgorithm )
+		switch *flAlgorithm {
+		case "ECDSA":
+			algorithm = x509.ECDSA
+		default:
+			algorithm = x509.RSA
+		}
+
+		key, err := createKey(*flKeySize, []byte(*flPassword), *flDepotPath, algorithm)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
+		var pub crypto.PublicKey
+		switch algorithm {
+		case x509.ECDSA:
+			ecdsakey := (*key).(*ecdsa.PrivateKey)
+			pub = ecdsakey.Public()
+		default:
+			rsakey := (*key).(*rsa.PrivateKey)
+			pub = rsakey.Public()
+		}
+
+		if err := createCertificateAuthority(key, &pub, *flYears, *flOrg, *flOrgUnit, *flCountry, *flDepotPath); err != nil {
+			fmt.Println(err)
+			return 1
+		}
+	}
+
+
+
+	/*
 	if *flInit {
 		fmt.Println("Initializing new CA")
 		key, err := createKey(*flKeySize, []byte(*flPassword), *flDepotPath)
@@ -187,12 +227,12 @@ func caMain(cmd *flag.FlagSet) int {
 			return 1
 		}
 	}
-
+    */
 	return 0
 }
 
 // create a key, save it to depot and return it for further usage.
-func createKey(bits int, password []byte, depot string) (*rsa.PrivateKey, error) {
+func createKey(bits int, password []byte, depot string, algorithm x509.PublicKeyAlgorithm) (*crypto.PrivateKey, error) {
 	// create depot folder if missing
 	if err := os.MkdirAll(depot, 0755); err != nil {
 		return nil, err
@@ -204,17 +244,46 @@ func createKey(bits int, password []byte, depot string) (*rsa.PrivateKey, error)
 	}
 	defer file.Close()
 
-	// create RSA key and save as PEM file
-	key, err := rsa.GenerateKey(rand.Reader, bits)
+	var key crypto.PrivateKey
+	var blockType string
+
+	switch algorithm {
+	case x509.ECDSA:
+		blockType = common.EcdsaPrivateKeyPEMBlockType
+		switch bits {
+		case 256:
+			key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		case 384:
+			key, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		case 521:
+			key, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+		default:
+			return nil, errors.New("Key size not supported.")
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	default:
+		// create RSA key and save as PEM file
+		blockType = common.RsaPrivateKeyPEMBlockType
+		key, err = rsa.GenerateKey(rand.Reader, bits)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pkcs8key, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, err
 	}
+
 	privPEMBlock, err := x509.EncryptPEMBlock(
 		rand.Reader,
-		rsaPrivateKeyPEMBlockType,
-		x509.MarshalPKCS1PrivateKey(key),
+		blockType,
+		pkcs8key,  //x509.MarshalPKCS1PrivateKey(key),
 		password,
-		x509.PEMCipher3DES,
+		x509.PEMCipherAES256,
 	)
 	if err != nil {
 		return nil, err
@@ -224,10 +293,10 @@ func createKey(bits int, password []byte, depot string) (*rsa.PrivateKey, error)
 		return nil, err
 	}
 
-	return key, nil
+	return &key, nil
 }
 
-func createCertificateAuthority(key *rsa.PrivateKey, years int, organization string, organizationalUnit string, country string, depot string) error {
+func createCertificateAuthority(privkey *crypto.PrivateKey, pubkey *crypto.PublicKey,years int, organization string, organizationalUnit string, country string, depot string) error {
 	var (
 		authPkixName = pkix.Name{
 			Country:            nil,
@@ -272,16 +341,21 @@ func createCertificateAuthority(key *rsa.PrivateKey, years int, organization str
 		}
 	)
 
-	subjectKeyID, err := generateSubjectKeyID(&key.PublicKey)
-	if err != nil {
-		return err
-	}
+	var subjectKeyID []byte
+	var crtBytes []byte
+	var err error
+
 	authTemplate.SubjectKeyId = subjectKeyID
 	authTemplate.NotAfter = time.Now().AddDate(years, 0, 0).UTC()
 	authTemplate.Subject.Country = []string{country}
 	authTemplate.Subject.Organization = []string{organization}
 	authTemplate.Subject.OrganizationalUnit = []string{organizationalUnit}
-	crtBytes, err := x509.CreateCertificate(rand.Reader, &authTemplate, &authTemplate, &key.PublicKey, key)
+
+	subjectKeyID, err = generateSubjectKeyID(*pubkey)
+	if err != nil {
+		return err
+	}
+	crtBytes, err = x509.CreateCertificate(rand.Reader, &authTemplate, &authTemplate, *pubkey, *privkey)
 	if err != nil {
 		return err
 	}
@@ -302,10 +376,13 @@ func createCertificateAuthority(key *rsa.PrivateKey, years int, organization str
 	return nil
 }
 
+/* --- moved to common
 const (
 	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
+	ecdsaPrivateKeyPEMBlockType = "ECDSA PRIVATE KEY"
 	certificatePEMBlockType   = "CERTIFICATE"
 )
+*/
 
 // rsaPublicKey reflects the ASN.1 structure of a PKCS#1 public key.
 type rsaPublicKey struct {
@@ -313,9 +390,16 @@ type rsaPublicKey struct {
 	E int
 }
 
+// ecdsaPublicKey reflects the ASN.1 structure of a PKCS#1 public key.
+type ecdsaPublicKey struct {
+	X *big.Int
+	Y *big.Int
+}
+
 // GenerateSubjectKeyID generates SubjectKeyId used in Certificate
 // ID is 160-bit SHA-1 hash of the value of the BIT STRING subjectPublicKey
-func generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
+func
+generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
 	var pubBytes []byte
 	var err error
 	switch pub := pub.(type) {
@@ -327,8 +411,14 @@ func generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	case *ecdsa.PublicKey:
+		pubBytes, err = asn1.Marshal(ecdsaPublicKey{
+			pub.X,
+			pub.Y,
+		})
+
 	default:
-		return nil, errors.New("only RSA public key is supported")
+		return nil, errors.New("only RSA and ECDSA public keys are supported")
 	}
 
 	hash := sha1.Sum(pubBytes)
@@ -338,7 +428,7 @@ func generateSubjectKeyID(pub crypto.PublicKey) ([]byte, error) {
 
 func pemCert(derBytes []byte) []byte {
 	pemBlock := &pem.Block{
-		Type:    certificatePEMBlockType,
+		Type:    common.CertificatePEMBlockType,
 		Headers: nil,
 		Bytes:   derBytes,
 	}

@@ -3,7 +3,7 @@ package file
 import (
 	"bufio"
 	"bytes"
-	"crypto/rsa"
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/wrcgator/scep/common"
 )
 
 // NewFileDepot returns a new cert depot.
@@ -33,7 +35,7 @@ type fileDepot struct {
 	dirPath string
 }
 
-func (d *fileDepot) CA(pass []byte) ([]*x509.Certificate, *rsa.PrivateKey, error) {
+func (d *fileDepot) CA(pass []byte) ([]*x509.Certificate, *crypto.PrivateKey, error) {
 	caPEM, err := d.getFile("ca.pem")
 	if err != nil {
 		return nil, nil, err
@@ -356,18 +358,21 @@ func (d *fileDepot) path(name string) string {
 	return filepath.Join(d.dirPath, name)
 }
 
+/* -- moved to common
 const (
 	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
+	ecdsaPrivateKeyPEMBlockType = "ECDSA PRIVATE KEY"
 	certificatePEMBlockType   = "CERTIFICATE"
 )
+*/
 
 // load an encrypted private key from disk
-func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
+func loadKey(data []byte, password []byte) (*crypto.PrivateKey, error) {
 	pemBlock, _ := pem.Decode(data)
 	if pemBlock == nil {
 		return nil, errors.New("PEM decode failed")
 	}
-	if pemBlock.Type != rsaPrivateKeyPEMBlockType {
+	if pemBlock.Type != common.RsaPrivateKeyPEMBlockType &&  pemBlock.Type != common.EcdsaPrivateKeyPEMBlockType{
 		return nil, errors.New("unmatched type or headers")
 	}
 
@@ -375,7 +380,12 @@ func loadKey(data []byte, password []byte) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return x509.ParsePKCS1PrivateKey(b)
+	//return x509.ParsePKCS1PrivateKey(b)
+	pkcs8key, err := x509.ParsePKCS8PrivateKey(b)
+
+	privateKey := pkcs8key.(crypto.PrivateKey)
+	return &privateKey, err
+
 }
 
 // load an encrypted private key from disk
@@ -384,7 +394,7 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 	if pemBlock == nil {
 		return nil, errors.New("PEM decode failed")
 	}
-	if pemBlock.Type != certificatePEMBlockType {
+	if pemBlock.Type != common.CertificatePEMBlockType {
 		return nil, errors.New("unmatched type or headers")
 	}
 
@@ -393,7 +403,7 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 
 func pemCert(derBytes []byte) []byte {
 	pemBlock := &pem.Block{
-		Type:    certificatePEMBlockType,
+		Type:    common.CertificatePEMBlockType,
 		Headers: nil,
 		Bytes:   derBytes,
 	}

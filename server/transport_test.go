@@ -17,9 +17,11 @@ import (
 
 	kitlog "github.com/go-kit/kit/log"
 
-	"github.com/micromdm/scep/depot"
-	filedepot "github.com/micromdm/scep/depot/file"
-	scepserver "github.com/micromdm/scep/server"
+	"github.com/wrcgator/scep/depot"
+	"github.com/wrcgator/scep/common"
+
+	filedepot "github.com/wrcgator/scep/depot/file"
+	scepserver "github.com/wrcgator/scep/server"
 )
 
 func TestCACaps(t *testing.T) {
@@ -123,10 +125,12 @@ func (d *noopDepot) Put(name string, crt *x509.Certificate) error {
 }
 
 /* helpers */
+/*  --- moved to common.go
 const (
 	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
 	certificatePEMBlockType   = "CERTIFICATE"
 )
+*/
 
 func loadTestFile(t *testing.T, path string) []byte {
 	data, err := ioutil.ReadFile(path)
@@ -211,7 +215,7 @@ func loadKeyFromFile(path string) (*rsa.PrivateKey, error) {
 	if pemBlock == nil {
 		return nil, errors.New("PEM decode failed")
 	}
-	if pemBlock.Type != rsaPrivateKeyPEMBlockType {
+	if pemBlock.Type != RsaPrivateKeyPEMBlockType {
 		return nil, errors.New("unmatched type or headers")
 	}
 

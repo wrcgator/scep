@@ -15,7 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/micromdm/scep/scep"
+	"github.com/wrcgator/scep/scep"
+	"github.com/wrcgator/scep/common"
 )
 
 func testParsePKIMessage(t *testing.T, data []byte) *scep.PKIMessage {
@@ -186,10 +187,12 @@ func loadClientCredentials(t *testing.T) (*x509.Certificate, *rsa.PrivateKey) {
 	return cert, key
 }
 
+/* --- moved to common
 const (
 	rsaPrivateKeyPEMBlockType = "RSA PRIVATE KEY"
 	certificatePEMBlockType   = "CERTIFICATE"
 )
+*/
 
 func loadCertFromFile(path string) (*x509.Certificate, error) {
 	data, err := ioutil.ReadFile(path)
@@ -218,7 +221,7 @@ func loadKeyFromFile(path string) (*rsa.PrivateKey, error) {
 	if pemBlock == nil {
 		return nil, errors.New("PEM decode failed")
 	}
-	if pemBlock.Type != rsaPrivateKeyPEMBlockType {
+	if pemBlock.Type != RsaPrivateKeyPEMBlockType {
 		return nil, errors.New("unmatched type or headers")
 	}
 
